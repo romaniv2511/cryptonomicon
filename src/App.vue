@@ -23,7 +23,7 @@
               class="flex bg-white shadow-md p-1 rounded-md flex-wrap"
             >
               <span
-                v-for="index of filteredIndices()"
+                v-for="index of filteredCoinList()"
                 :key="index"
                 @click="(ticker = index), addTicker()"
                 class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
@@ -60,9 +60,30 @@
 
       <template v-if="tickers.length > 0">
         <hr class="w-full border-t border-gray-600 my-4" />
+        <span> Filter: </span>
+        <input
+          v-model="filter"
+          class="pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
+        />
+        <div>
+          <button
+            v-if="page > 1"
+            @click="page -= 1"
+            class="mr-4 my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          >
+            Prev
+          </button>
+          <button
+            @click="page += 1"
+            class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          >
+            Next
+          </button>
+        </div>
+        <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-            v-for="t of tickers"
+            v-for="t of filteredTickers()"
             v-bind:key="t.name"
             @click="selectTicker(t)"
             :class="{
@@ -154,24 +175,27 @@ export default {
       tickers: [],
       sel: null,
       graph: [],
-      indices: [],
+      coinList: [],
+      page: 1,
+      filter: "",
     };
   },
   computed: {
     showIndices() {
-      return this.filteredIndices()?.length > 0;
+      return this.filteredCoinList()?.length > 0;
     },
     isDublicatedTicker() {
       return this.tickers.some((t) => t.name === this.ticker);
     },
   },
+
   methods: {
     async getAvailableIndices() {
       const response = await fetch(
-        "https://min-api.cryptocompare.com/data/index/underlying/list?max_length=2000&api_key=42d33137984f37ff35c8d9a957a6c6f147f125afb0b1bd10ef5241b9c58f6f66"
+        "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
       );
-      const data = await response.json();
-      this.indices = Object.keys(data.Data.CCMVDA.base);
+      const { Data } = await response.json();
+      this.coinList = Object.keys(Data);
     },
 
     addTicker() {
@@ -196,7 +220,7 @@ export default {
         if (this.sel?.name === currentTicker.name) {
           this.graph.push(data.USD);
         }
-      }, 5000);
+      }, 50000);
 
       this.ticker = "";
     },
@@ -217,17 +241,27 @@ export default {
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
     },
-    filteredIndices() {
+    filteredCoinList() {
       if (!this.ticker) return;
 
-      const filteredIdx = this.indices.filter((i) =>
+      const filteredIdx = this.coinList.filter((i) =>
         i.includes(this.ticker.toUpperCase())
       );
 
-      if (filteredIdx > 4) {
+      if (filteredIdx.length > 4) {
         return filteredIdx.slice(0, 4);
       }
       return filteredIdx;
+    },
+    filteredTickers() {
+      const start = (this.page - 1) * 6;
+      const end = this.page * 6;
+
+      const filteredList = this.tickers.filter(({ name }) =>
+        name.includes(this.filter.toUpperCase())
+      );
+
+      return filteredList.slice(start, end);
     },
   },
   created() {
