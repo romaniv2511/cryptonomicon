@@ -74,6 +74,7 @@
             Prev
           </button>
           <button
+            v-if="hasNextPage"
             @click="page += 1"
             class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
           >
@@ -178,6 +179,7 @@ export default {
       coinList: [],
       page: 1,
       filter: "",
+      hasNextPage: false,
     };
   },
   computed: {
@@ -186,6 +188,24 @@ export default {
     },
     isDublicatedTicker() {
       return this.tickers.some((t) => t.name === this.ticker);
+    },
+  },
+  watch: {
+    filter() {
+      this.page = 1;
+
+      window.history.pushState(
+        {},
+        "",
+        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+      );
+    },
+    page() {
+      window.history.pushState(
+        {},
+        "",
+        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+      );
     },
   },
 
@@ -197,6 +217,22 @@ export default {
       const { Data } = await response.json();
       this.coinList = Object.keys(Data);
     },
+    subscribeToUpdate(tickerName) {
+      setInterval(async () => {
+        const response = await fetch(
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=42d33137984f37ff35c8d9a957a6c6f147f125afb0b1bd10ef5241b9c58f6f66`
+        );
+
+        const data = await response.json();
+
+        this.tickers.find((t) => t.name === tickerName).price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+
+        if (this.sel?.name === tickerName) {
+          this.graph.push(data.USD);
+        }
+      }, 50000);
+    },
 
     addTicker() {
       const currentTicker = {
@@ -207,20 +243,9 @@ export default {
         return;
       }
       this.tickers.push(currentTicker);
-      setInterval(async () => {
-        const response = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=42d33137984f37ff35c8d9a957a6c6f147f125afb0b1bd10ef5241b9c58f6f66`
-        );
+      this.subscribeToUpdate(currentTicker.name);
 
-        const data = await response.json();
-
-        this.tickers.find((t) => t.name === currentTicker.name).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-
-        if (this.sel?.name === currentTicker.name) {
-          this.graph.push(data.USD);
-        }
-      }, 50000);
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
 
       this.ticker = "";
     },
@@ -230,9 +255,11 @@ export default {
     },
     removeTicker(ticker) {
       this.tickers = this.tickers.filter((i) => i.name !== ticker);
-      if (ticker === this.sel.name) {
+      if (ticker === this.sel?.name) {
         this.sel = null;
       }
+
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
     },
     normalizedGraph() {
       const maxValue = Math.max(...this.graph);
@@ -257,14 +284,30 @@ export default {
       const start = (this.page - 1) * 6;
       const end = this.page * 6;
 
-      const filteredList = this.tickers.filter(({ name }) =>
+      const filteredTickers = this.tickers.filter(({ name }) =>
         name.includes(this.filter.toUpperCase())
       );
+      this.hasNextPage = filteredTickers.length > end;
 
-      return filteredList.slice(start, end);
+      if (filteredTickers.length + 6 === end) {
+        this.page -= 1;
+      }
+
+      return filteredTickers.slice(start, end);
     },
   },
   created() {
+    const savedTickers = localStorage.getItem("cryptonomicon-list");
+    if (savedTickers) {
+      this.tickers = JSON.parse(savedTickers);
+      this.tickers.forEach(({ name }) => this.subscribeToUpdate(name));
+    }
+    const searchParams = new URLSearchParams(window.location.search);
+    if (window.location.search) {
+      this.filter = searchParams.get("filter");
+      this.page = Number(searchParams.get("page"));
+    }
+
     this.getAvailableIndices();
   },
 };
