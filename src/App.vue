@@ -84,11 +84,11 @@
         <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-            v-for="t of filteredTickers()"
+            v-for="t of paginatedTickers"
             v-bind:key="t.name"
             @click="selectTicker(t)"
             :class="{
-              'border-4': sel === t,
+              'border-4': selectedTicker === t,
             }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
@@ -122,20 +122,20 @@
           </div>
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
-        <section v-if="sel" class="relative">
+        <section v-if="selectedTicker" class="relative">
           <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-            {{ sel.name }} - USD
+            {{ selectedTicker.name }} - USD
           </h3>
           <div class="flex items-end border-gray-600 border-b border-l h-64">
             <div
-              v-for="(bar, idx) of normalizedGraph()"
+              v-for="(bar, idx) of normalizedGraph"
               :key="idx"
               :style="{ height: `${bar}%` }"
               class="bg-purple-800 border w-10"
             ></div>
           </div>
           <button
-            @click="sel = null"
+            @click="selectedTicker = null"
             type="button"
             class="absolute top-0 right-0"
           >
@@ -168,18 +168,26 @@
 </template>
 
 <script>
+import {
+  getAvailableIndices,
+  subscribeToTicker,
+  unsubscribeFromTicker,
+} from "./api";
+
 export default {
   name: "App",
   data() {
     return {
       ticker: "",
-      tickers: [],
-      sel: null,
-      graph: [],
-      coinList: [],
-      page: 1,
       filter: "",
-      hasNextPage: false,
+
+      tickers: [],
+      selectedTicker: null,
+
+      graph: [],
+
+      page: 1,
+      coinList: [],
     };
   },
   computed: {
@@ -189,51 +197,63 @@ export default {
     isDublicatedTicker() {
       return this.tickers.some((t) => t.name === this.ticker);
     },
+    normalizedGraph() {
+      const maxValue = Math.max(...this.graph);
+      const minValue = Math.min(...this.graph);
+      return this.graph.map(
+        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
+      );
+    },
+    startIndex() {
+      return (this.page - 1) * 6;
+    },
+    endIndex() {
+      return this.page * 6;
+    },
+    hasNextPage() {
+      return this.filteredTickers.length > this.endIndex;
+    },
+    filteredTickers() {
+      return this.tickers.filter(({ name }) =>
+        name.includes(this.filter.toUpperCase())
+      );
+    },
+    paginatedTickers() {
+      return this.filteredTickers.slice(this.startIndex, this.endIndex);
+    },
+
+    pageStateOptions() {
+      return {
+        filter: this.filter,
+        page: this.page,
+      };
+    },
   },
   watch: {
     filter() {
       this.page = 1;
-
-      window.history.pushState(
-        {},
-        "",
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
-      );
     },
-    page() {
+    tickers() {
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
+    },
+
+    paginatedTickers() {
+      if (this.paginatedTickers.length === 0 && this.page > 1) {
+        this.page -= 1;
+      }
+    },
+    selectedTicker() {
+      this.graph = [];
+    },
+    pageStateOptions(value) {
       window.history.pushState(
-        {},
-        "",
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+        null,
+        document.title,
+        `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
       );
     },
   },
-
   methods: {
-    async getAvailableIndices() {
-      const response = await fetch(
-        "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
-      );
-      const { Data } = await response.json();
-      this.coinList = Object.keys(Data);
-    },
-    subscribeToUpdate(tickerName) {
-      setInterval(async () => {
-        const response = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=42d33137984f37ff35c8d9a957a6c6f147f125afb0b1bd10ef5241b9c58f6f66`
-        );
-
-        const data = await response.json();
-
-        this.tickers.find((t) => t.name === tickerName).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-
-        if (this.sel?.name === tickerName) {
-          this.graph.push(data.USD);
-        }
-      }, 50000);
-    },
-
     addTicker() {
       const currentTicker = {
         name: this.ticker.toUpperCase(),
@@ -242,73 +262,85 @@ export default {
       if (this.isDublicatedTicker) {
         return;
       }
-      this.tickers.push(currentTicker);
-      this.subscribeToUpdate(currentTicker.name);
 
-      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
+      this.tickers = [...this.tickers, currentTicker];
 
+      subscribeToTicker(currentTicker.name, (newPrice) =>
+        this.updateTicker(currentTicker.name, newPrice)
+      );
       this.ticker = "";
+      this.filter = "";
+    },
+    updateTicker(tickerName, price) {
+      this.tickers
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => {
+          t.price = this.formatPrice(price);
+
+          if (t === this.selectedTicker) {
+            this.graph.push(price);
+          }
+        });
     },
     selectTicker(ticker) {
-      this.sel = ticker;
-      this.graph = [];
+      this.selectedTicker = ticker;
     },
-    removeTicker(ticker) {
-      this.tickers = this.tickers.filter((i) => i.name !== ticker);
-      if (ticker === this.sel?.name) {
-        this.sel = null;
+    removeTicker(tickerToRemove) {
+      this.tickers = this.tickers.filter((i) => i.name !== tickerToRemove);
+      if (tickerToRemove === this.selectedTicker?.name) {
+        this.selectedTicker = null;
       }
-
-      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
+      unsubscribeFromTicker(tickerToRemove);
     },
-    normalizedGraph() {
-      const maxValue = Math.max(...this.graph);
-      const minValue = Math.min(...this.graph);
-      return this.graph.map(
-        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
-      );
+
+    formatPrice(price) {
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
     filteredCoinList() {
       if (!this.ticker) return;
 
-      const filteredIdx = this.coinList.filter((i) =>
+      const filteredCoins = this.coinList.filter((i) =>
         i.includes(this.ticker.toUpperCase())
       );
 
-      if (filteredIdx.length > 4) {
-        return filteredIdx.slice(0, 4);
+      if (filteredCoins.length > 4) {
+        return filteredCoins.slice(0, 4);
       }
-      return filteredIdx;
-    },
-    filteredTickers() {
-      const start = (this.page - 1) * 6;
-      const end = this.page * 6;
-
-      const filteredTickers = this.tickers.filter(({ name }) =>
-        name.includes(this.filter.toUpperCase())
-      );
-      this.hasNextPage = filteredTickers.length > end;
-
-      if (filteredTickers.length + 6 === end) {
-        this.page -= 1;
-      }
-
-      return filteredTickers.slice(start, end);
+      return filteredCoins;
     },
   },
+
   created() {
+    const windowData = Object.fromEntries(
+      new URL(window.location).searchParams.entries()
+    );
+
+    const VALID_KEYS = ["filter", "page"];
+
+    VALID_KEYS.forEach((key) => {
+      if (windowData[key]) {
+        this[key] = windowData[key];
+      }
+    });
+
+    getAvailableIndices()
+      .then(({ Data }) => {
+        this.coinList = Object.keys(Data);
+      })
+      .catch((error) => console.log(error));
+
     const savedTickers = localStorage.getItem("cryptonomicon-list");
+
     if (savedTickers) {
       this.tickers = JSON.parse(savedTickers);
-      this.tickers.forEach(({ name }) => this.subscribeToUpdate(name));
-    }
-    const searchParams = new URLSearchParams(window.location.search);
-    if (window.location.search) {
-      this.filter = searchParams.get("filter");
-      this.page = Number(searchParams.get("page"));
-    }
 
-    this.getAvailableIndices();
+      this.tickers.forEach((ticker) => {
+        subscribeToTicker(ticker.name, (newPrice) => {
+          this.updateTicker(ticker.name, newPrice);
+        });
+      });
+    }
+    setInterval(this.updateTickers, 5000);
   },
 };
 </script>
