@@ -7,23 +7,33 @@ const socket = new WebSocket(
 );
 
 const AGGREGATE_INDEX = "5";
+const ERROR_TYPE = "500";
 
 socket.addEventListener("message", (e) => {
   const {
     TYPE: type,
     FROMSYMBOL: currency,
     PRICE: newPrice,
+    PARAMETER,
   } = JSON.parse(e.data);
+
+  if (type === ERROR_TYPE) {
+    const errorParams = PARAMETER.split("~");
+    const currency = errorParams[2];
+    const handlers = tickersHandlers.get(currency) ?? [];
+
+    handlers.forEach((fn) => fn("error"));
+  }
   if (type !== AGGREGATE_INDEX || newPrice === undefined) return;
 
   const handlers = tickersHandlers.get(currency) ?? [];
+
   handlers.forEach((fn) => fn(newPrice));
 });
 
 function sendToWebSocket(message) {
   const stringifiedMessage = JSON.stringify(message);
-  console.log(socket);
-  console.log(WebSocket.OPEN);
+
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(stringifiedMessage);
     return;

@@ -89,6 +89,7 @@
             @click="selectTicker(t)"
             :class="{
               'border-4': selectedTicker === t,
+              'bg-red-100': invalidTickers.includes(t.name),
             }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
@@ -183,6 +184,7 @@ export default {
 
       tickers: [],
       selectedTicker: null,
+      invalidTickers: [],
 
       graph: [],
 
@@ -252,6 +254,9 @@ export default {
         `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
       );
     },
+    invalidTickers() {
+      console.log(this.invalidTickers);
+    },
   },
   methods: {
     addTicker() {
@@ -272,6 +277,11 @@ export default {
       this.filter = "";
     },
     updateTicker(tickerName, price) {
+      if (price === "error") {
+        this.invalidTickers = [...this.invalidTickers, tickerName];
+        return;
+      }
+
       this.tickers
         .filter((t) => t.name === tickerName)
         .forEach((t) => {
@@ -287,6 +297,9 @@ export default {
     },
     removeTicker(tickerToRemove) {
       this.tickers = this.tickers.filter((i) => i.name !== tickerToRemove);
+      this.invalidTickers = this.invalidTickers.filter(
+        (i) => i.name !== tickerToRemove
+      );
       if (tickerToRemove === this.selectedTicker?.name) {
         this.selectedTicker = null;
       }
