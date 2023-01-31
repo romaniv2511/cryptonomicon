@@ -127,12 +127,16 @@
           <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
             {{ selectedTicker.name }} - USD
           </h3>
-          <div class="flex items-end border-gray-600 border-b border-l h-64">
+          <div
+            class="flex items-end border-gray-600 border-b border-l h-64"
+            ref="graph"
+          >
             <div
               v-for="(bar, idx) of normalizedGraph"
               :key="idx"
               :style="{ height: `${bar}%` }"
               class="bg-purple-800 border w-10"
+              ref="graphElement"
             ></div>
           </div>
           <button
@@ -187,6 +191,7 @@ export default {
       invalidTickers: [],
 
       graph: [],
+      maxGraphElements: 0,
 
       page: 1,
       coinList: [],
@@ -202,6 +207,7 @@ export default {
     normalizedGraph() {
       const maxValue = Math.max(...this.graph);
       const minValue = Math.min(...this.graph);
+
       return this.graph.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
@@ -257,8 +263,24 @@ export default {
     invalidTickers() {
       console.log(this.invalidTickers);
     },
+    maxGraphElements() {
+      this.sliceGraph();
+    },
   },
   methods: {
+    sliceGraph() {
+      if (this.graph.length > this.maxGraphElements) {
+        this.graph = this.graph.slice(-this.maxGraphElements);
+      }
+    },
+    calculateMaxGraphElements() {
+      if (!this.$refs.graph) {
+        return;
+      }
+      const boxWidth = this.$refs.graph.clientWidth;
+      const elementWidth = 38;
+      this.maxGraphElements = (boxWidth / elementWidth).toFixed(0);
+    },
     addTicker() {
       const currentTicker = {
         name: this.ticker.toUpperCase(),
@@ -289,6 +311,8 @@ export default {
 
           if (t === this.selectedTicker) {
             this.graph.push(price);
+            this.calculateMaxGraphElements();
+            this.sliceGraph();
           }
         });
     },
@@ -322,7 +346,12 @@ export default {
       return filteredCoins;
     },
   },
-
+  mounted() {
+    window.addEventListener("resize", this.calculateMaxGraphElements);
+  },
+  beforeUnmount() {
+    window.removeEventListener("resize", this.calculateMaxGraphElements);
+  },
   created() {
     const windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
