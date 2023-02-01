@@ -134,8 +134,8 @@
             <div
               v-for="(bar, idx) of normalizedGraph"
               :key="idx"
-              :style="{ height: `${bar}%` }"
-              class="bg-purple-800 border w-10"
+              :style="{ height: `${bar}%`, width: `${widthGraphElement}px` }"
+              class="bg-purple-800 border"
               ref="graphElement"
             ></div>
           </div>
@@ -192,6 +192,7 @@ export default {
 
       graph: [],
       maxGraphElements: 0,
+      widthGraphElement: 36,
 
       page: 1,
       coinList: [],
@@ -277,9 +278,9 @@ export default {
       if (!this.$refs.graph) {
         return;
       }
-      const boxWidth = this.$refs.graph.clientWidth;
-      const elementWidth = 38;
-      this.maxGraphElements = (boxWidth / elementWidth).toFixed(0);
+      this.maxGraphElements = (
+        this.$refs.graph.clientWidth / this.widthGraphElement
+      ).toFixed(0);
     },
     addTicker() {
       const currentTicker = {
