@@ -8,28 +8,57 @@ const socket = new WebSocket(
 
 const AGGREGATE_INDEX = "5";
 const ERROR_TYPE = "500";
+let validPriceBTC = null;
 
 socket.addEventListener("message", (e) => {
   const {
     TYPE: type,
     FROMSYMBOL: currency,
+    TOSYMBOL: convertedSymbol,
     PRICE: newPrice,
     PARAMETER,
   } = JSON.parse(e.data);
 
   if (type === ERROR_TYPE) {
     const errorParams = PARAMETER.split("~");
-    const currency = errorParams[2];
-    const handlers = tickersHandlers.get(currency) ?? [];
+    const currentTicker = errorParams[2];
+    const toSymbol = errorParams[3];
+
+    if (toSymbol !== "BTC") {
+      checkTicketToBTC(currentTicker);
+      return;
+    }
+    const handlers = tickersHandlers.get(currentTicker) ?? [];
 
     handlers.forEach((fn) => fn("error"));
   }
   if (type !== AGGREGATE_INDEX || newPrice === undefined) return;
 
+  if (currency === "BTC") {
+    validPriceBTC = newPrice;
+  }
+  if (convertedSymbol === "BTC" && !validPriceBTC) {
+    sendToWebSocket({
+      action: "SubAdd",
+      subs: [`5~CCCAGG~BTC~USD`],
+    });
+    return;
+  }
+
   const handlers = tickersHandlers.get(currency) ?? [];
 
-  handlers.forEach((fn) => fn(newPrice));
+  const updatedPrice =
+    convertedSymbol === "BTC" ? newPrice * validPriceBTC : newPrice;
+
+  handlers.forEach((fn) => fn(updatedPrice));
 });
+
+function checkTicketToBTC(ticketName) {
+  sendToWebSocket({
+    action: "SubAdd",
+    subs: [`5~CCCAGG~${ticketName}~BTC`],
+  });
+}
 
 function sendToWebSocket(message) {
   const stringifiedMessage = JSON.stringify(message);

@@ -1,63 +1,7 @@
 <template>
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
     <div class="container">
-      <section>
-        <div class="flex">
-          <div class="max-w-xs">
-            <label for="wallet" class="block text-sm font-medium text-gray-700"
-              >Тикер</label
-            >
-            <div class="mt-1 relative rounded-md shadow-md">
-              <input
-                v-model="ticker"
-                @keydown.enter="addTicker"
-                type="text"
-                name="wallet"
-                id="wallet"
-                class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
-                placeholder="Например DOGE"
-              />
-            </div>
-            <div
-              v-if="showIndices"
-              class="flex bg-white shadow-md p-1 rounded-md flex-wrap"
-            >
-              <span
-                v-for="index of filteredCoinList()"
-                :key="index"
-                @click="(ticker = index), addTicker()"
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                {{ index }}
-              </span>
-            </div>
-            <div v-if="isDublicatedTicker" class="text-sm text-red-600">
-              Такой тикер уже добавлен
-            </div>
-          </div>
-        </div>
-        <button
-          @click="addTicker"
-          type="button"
-          class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-        >
-          <!-- Heroicon name: solid/mail -->
-          <svg
-            class="-ml-0.5 mr-2 h-6 w-6"
-            xmlns="http://www.w3.org/2000/svg"
-            width="30"
-            height="30"
-            viewBox="0 0 24 24"
-            fill="#ffffff"
-          >
-            <path
-              d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4V7zm-1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
-            ></path>
-          </svg>
-          Добавить
-        </button>
-      </section>
-
+      <add-ticker @add-ticker="addTicker" :disabled="tooManyTickersAdded" />
       <template v-if="tickers.length > 0">
         <hr class="w-full border-t border-gray-600 my-4" />
         <span> Filter: </span>
@@ -86,12 +30,17 @@
           <div
             v-for="t of paginatedTickers"
             v-bind:key="t.name"
-            @click="selectTicker(t)"
+            @click="
+              {
+                selectTicker(t);
+              }
+            "
             :class="{
               'border-4': selectedTicker === t,
               'bg-red-100': invalidTickers.includes(t.name),
+              'bg-w': !invalidTickers.includes(t.name),
             }"
-            class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
+            class="overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
               <dt class="text-sm font-medium text-gray-500 truncate">
@@ -173,17 +122,16 @@
 </template>
 
 <script>
-import {
-  getAvailableIndices,
-  subscribeToTicker,
-  unsubscribeFromTicker,
-} from "./api";
+import { subscribeToTicker, unsubscribeFromTicker } from "./api";
+import AddTicker from "./components/AddTicker";
 
 export default {
   name: "App",
+  components: {
+    AddTicker,
+  },
   data() {
     return {
-      ticker: "",
       filter: "",
 
       tickers: [],
@@ -195,16 +143,15 @@ export default {
       widthGraphElement: 36,
 
       page: 1,
-      coinList: [],
+
+      isDublicatedTicker: false,
     };
   },
   computed: {
-    showIndices() {
-      return this.filteredCoinList()?.length > 0;
+    tooManyTickersAdded() {
+      return this.tickers.length > 20;
     },
-    isDublicatedTicker() {
-      return this.tickers.some((t) => t.name === this.ticker);
-    },
+
     normalizedGraph() {
       const maxValue = Math.max(...this.graph);
       const minValue = Math.min(...this.graph);
@@ -238,36 +185,7 @@ export default {
       };
     },
   },
-  watch: {
-    filter() {
-      this.page = 1;
-    },
-    tickers() {
-      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
-    },
 
-    paginatedTickers() {
-      if (this.paginatedTickers.length === 0 && this.page > 1) {
-        this.page -= 1;
-      }
-    },
-    selectedTicker() {
-      this.graph = [];
-    },
-    pageStateOptions(value) {
-      window.history.pushState(
-        null,
-        document.title,
-        `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
-      );
-    },
-    invalidTickers() {
-      console.log(this.invalidTickers);
-    },
-    maxGraphElements() {
-      this.sliceGraph();
-    },
-  },
   methods: {
     sliceGraph() {
       if (this.graph.length > this.maxGraphElements) {
@@ -275,19 +193,19 @@ export default {
       }
     },
     calculateMaxGraphElements() {
-      if (!this.$refs.graph) {
-        return;
-      }
+      if (!this.$refs.graph) return;
+
       this.maxGraphElements = (
         this.$refs.graph.clientWidth / this.widthGraphElement
       ).toFixed(0);
     },
-    addTicker() {
+    addTicker(ticker) {
       const currentTicker = {
-        name: this.ticker.toUpperCase(),
+        name: ticker.toUpperCase(),
         price: "-",
       };
-      if (this.isDublicatedTicker) {
+      const isDublicate = this.tickers.some((t) => t.name === ticker);
+      if (isDublicate) {
         return;
       }
 
@@ -301,7 +219,9 @@ export default {
     },
     updateTicker(tickerName, price) {
       if (price === "error") {
+        console.log("error");
         this.invalidTickers = [...this.invalidTickers, tickerName];
+        console.log(this.invalidTickers);
         return;
       }
 
@@ -318,6 +238,7 @@ export default {
         });
     },
     selectTicker(ticker) {
+      console.log(ticker.name);
       this.selectedTicker = ticker;
     },
     removeTicker(tickerToRemove) {
@@ -334,25 +255,38 @@ export default {
     formatPrice(price) {
       return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
-    filteredCoinList() {
-      if (!this.ticker) return;
+  },
+  watch: {
+    filter() {
+      this.page = 1;
+    },
+    tickers() {
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
+    },
 
-      const filteredCoins = this.coinList.filter((i) =>
-        i.includes(this.ticker.toUpperCase())
-      );
-
-      if (filteredCoins.length > 4) {
-        return filteredCoins.slice(0, 4);
+    paginatedTickers() {
+      if (this.paginatedTickers.length === 0 && this.page > 1) {
+        this.page -= 1;
       }
-      return filteredCoins;
+    },
+    selectedTicker() {
+      this.graph = [];
+
+      this.$nextTick().then(this.calculateMaxGraphElements);
+    },
+    pageStateOptions(value) {
+      window.history.pushState(
+        null,
+        document.title,
+        `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
+      );
+    },
+
+    maxGraphElements() {
+      this.sliceGraph();
     },
   },
-  mounted() {
-    window.addEventListener("resize", this.calculateMaxGraphElements);
-  },
-  beforeUnmount() {
-    window.removeEventListener("resize", this.calculateMaxGraphElements);
-  },
+
   created() {
     const windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
@@ -366,12 +300,6 @@ export default {
       }
     });
 
-    getAvailableIndices()
-      .then(({ Data }) => {
-        this.coinList = Object.keys(Data);
-      })
-      .catch((error) => console.log(error));
-
     const savedTickers = localStorage.getItem("cryptonomicon-list");
 
     if (savedTickers) {
@@ -384,6 +312,12 @@ export default {
       });
     }
     setInterval(this.updateTickers, 5000);
+  },
+  mounted() {
+    window.addEventListener("resize", this.calculateMaxGraphElements);
+  },
+  beforeUnmount() {
+    window.removeEventListener("resize", this.calculateMaxGraphElements);
   },
 };
 </script>
