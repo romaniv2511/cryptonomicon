@@ -119,16 +119,19 @@
       </template>
     </div>
   </div>
+  <modal-window></modal-window>
 </template>
 
 <script>
-import { subscribeToTicker, unsubscribeFromTicker } from "./api";
+import { subscribeToTicker, unsubscribeFromTicker } from "./services/api";
 import AddTicker from "./components/AddTicker";
+import ModalWindow from "./components/ModalWindow";
 
 export default {
   name: "App",
   components: {
     AddTicker,
+    ModalWindow,
   },
   data() {
     return {
