@@ -38,7 +38,7 @@
             :class="{
               'border-4': selectedTicker === t,
               'bg-red-100': invalidTickers.includes(t.name),
-              'bg-w': !invalidTickers.includes(t.name),
+              'bg-white': !invalidTickers.includes(t.name),
             }"
             class="overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
