@@ -40,7 +40,7 @@
 </template>
 
 <script>
-import { getAvailableIndices } from "../api";
+import { getAvailableIndices } from "./services/api";
 import AddButton from "./AddButton";
 
 export default {
