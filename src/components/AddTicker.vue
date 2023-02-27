@@ -3,7 +3,7 @@
     <div class="flex">
       <div class="max-w-xs">
         <label for="wallet" class="block text-sm font-medium text-gray-700"
-          >Тикер</label
+          >Ticker</label
         >
         <div class="mt-1 relative rounded-md shadow-md">
           <input
@@ -23,11 +23,7 @@
           <span
             v-for="index of filteredCoinList()"
             :key="index"
-            @click="
-              {
-                (ticker = index), add;
-              }
-            "
+            @click="(ticker = index), add()"
             class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
           >
             {{ index }}
@@ -79,7 +75,6 @@ export default {
       const filteredCoins = this.coinList.filter((i) =>
         i.includes(this.ticker.toUpperCase())
       );
-
       if (filteredCoins.length > 4) {
         return filteredCoins.slice(0, 4);
       }
