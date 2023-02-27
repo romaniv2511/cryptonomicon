@@ -7,7 +7,7 @@
         <span> Filter: </span>
         <input
           v-model="filter"
-          class="pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
+          class="px-2 py-1 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
         />
         <div>
           <button
